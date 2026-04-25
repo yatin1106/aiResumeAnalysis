@@ -59,7 +59,7 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append("resume", file);
-     const res = await fetch("https://airesumeanalysis-1.onrender.com/api/analyse", { method: "POST", body: formData });
+     const res = await fetch("https://airesumeanalysis-1.onrender.com/analyse", { method: "POST", body: formData });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Server error");
       setResult(data);
