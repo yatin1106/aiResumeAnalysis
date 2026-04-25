@@ -11,7 +11,7 @@ app.use(cors());
 app.use(express.json());
 
 // 2. MOUNT ROUTE
-app.use("/api/analyse", analyzeRoute);
+app.use("/analyse", analyzeRoute);
 
 app.get("/", (req, res) => {
   res.send("Backend is running");
