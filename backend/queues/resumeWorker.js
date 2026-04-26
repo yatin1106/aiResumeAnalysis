@@ -4,8 +4,8 @@ const fs = require("fs");
 const pdfParse = require("pdf-parse");
 const { analyzeResume } = require("../services/groqServices");
 const { connection } = require("./resumeQueue"); // ← import, don't recreate
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../prismaClient");
+
 
 const RESUME_KEYWORDS = [
   "experience", "education", "skills", "work", "employment",

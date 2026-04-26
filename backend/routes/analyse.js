@@ -5,8 +5,8 @@ const path = require("path");
 const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
 const { resumeQueue } = require("../queues/resumeQueue");
-const { PrismaClient } = require("@prisma/client");
-const prisma = new PrismaClient();
+const prisma = require("../prismaClient");
+
 
 // Ensure uploads dir exists
 const uploadsDir = path.join(__dirname, "../uploads");
