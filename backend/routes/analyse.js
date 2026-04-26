@@ -2,13 +2,20 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 const { v4: uuidv4 } = require("uuid");
 const { resumeQueue } = require("../queues/resumeQueue");
-const { read, write } = require("../models/db");
+const { PrismaClient } = require("@prisma/client");
+const prisma = new PrismaClient();
 
-// Switch from memoryStorage to diskStorage so the worker can read the file
+// Ensure uploads dir exists
+const uploadsDir = path.join(__dirname, "../uploads");
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, path.join(__dirname, "../uploads/")),
+  destination: (req, file, cb) => cb(null, uploadsDir),
   filename: (req, file, cb) => {
     const ext = path.extname(file.originalname);
     cb(null, `${uuidv4()}${ext}`);
@@ -24,7 +31,16 @@ const upload = multer({
   },
 });
 
-router.post("/", upload.single("resume"), async (req, res) => {
+router.post("/", (req, res, next) => {
+  upload.single("resume")(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      return res.status(400).json({ error: `Upload error: ${err.message}` });
+    } else if (err) {
+      return res.status(400).json({ error: err.message });
+    }
+    next();
+  });
+}, async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: "No resume file uploaded." });
@@ -32,22 +48,19 @@ router.post("/", upload.single("resume"), async (req, res) => {
 
     const jobId = uuidv4();
     const jobRole = req.body.jobRole || "Software Engineer";
+    const userId = req.user?.id || null; // ← null, not "anonymous"
 
-    // Save job record
-    const db = read();
-    db.jobs.push({
-      id: jobId,
-      userId: req.user?.id || "anonymous",
-      status: "pending",
-      jobRole,
-      fileName: req.file.originalname,
-      createdAt: new Date().toISOString(),
-      result: null,
-      error: null,
+    // ← Save job record to Postgres, not file DB
+    await prisma.job.create({
+      data: {
+        id: jobId,
+        userId,
+        status: "pending",
+        jobRole,
+        fileName: req.file.originalname,
+      },
     });
-    write(db);
 
-    // Enqueue — worker will do PDF parse + Groq call
     await resumeQueue.add(
       "analyze",
       {
@@ -55,6 +68,7 @@ router.post("/", upload.single("resume"), async (req, res) => {
         filePath: req.file.path,
         fileType: req.file.mimetype,
         jobRole,
+        userId, // ← now passed to worker
       },
       {
         attempts: 3,
@@ -64,7 +78,6 @@ router.post("/", upload.single("resume"), async (req, res) => {
       }
     );
 
-    // Return instantly — client polls /jobs/:id
     res.status(202).json({
       jobId,
       status: "pending",
