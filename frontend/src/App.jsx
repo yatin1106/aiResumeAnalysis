@@ -17,6 +17,8 @@ const SECTION_COLORS = {
   red:    { bg: "#fff1f2", border: "#fecdd3", bullet: "#e11d48", tag: "#ffe4e6", tagText: "#be123c" },
 };
 
+const API_URL = "https://airesumeanalysis-production-32af.up.railway.app";
+
 export default function App() {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -59,13 +61,35 @@ export default function App() {
     try {
       const formData = new FormData();
       formData.append("resume", file);
-     const res = await fetch("https://airesumeanalysis-1.onrender.com/analyse", { method: "POST", body: formData });
+      formData.append("jobRole", "Software Engineer");
+
+      const res = await fetch(`${API_URL}/analyse`, {
+        method: "POST",
+        body: formData,
+      });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Server error");
-      setResult(data);
+
+      // Poll for result
+      const jobId = data.jobId;
+      let analysisResult = null;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const poll = await fetch(`${API_URL}/jobs/${jobId}`);
+        const pollData = await poll.json();
+        if (pollData.status === "done") {
+          analysisResult = pollData.result;
+          break;
+        } else if (pollData.status === "failed") {
+          throw new Error(pollData.error || "Analysis failed");
+        }
+      }
+
+      if (!analysisResult) throw new Error("Timed out waiting for analysis");
+      setResult(analysisResult);
       setActiveTab("summary");
     } catch (err) {
-      setError(err.message || "Analysis failed. Make sure your backend is running.");
+      setError(err.message || "Analysis failed.");
     } finally {
       setLoading(false);
     }
@@ -73,7 +97,12 @@ export default function App() {
 
   const handleCopy = () => {
     if (!result) return;
-    const text = SECTIONS.map(s => `${s.label}\n${"─".repeat(30)}\n${result[s.key]}`).join("\n\n");
+    const text = SECTIONS.map((s) => {
+      const content = Array.isArray(result[s.key])
+        ? result[s.key].join("\n")
+        : result[s.key];
+      return `${s.label}\n${"─".repeat(30)}\n${content}`;
+    }).join("\n\n");
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -86,13 +115,19 @@ export default function App() {
     setError(null);
   };
 
-  const activeSection = SECTIONS.find(s => s.key === activeTab);
+  const activeSection = SECTIONS.find((s) => s.key === activeTab);
   const colors = activeSection ? SECTION_COLORS[activeSection.color] : SECTION_COLORS.purple;
 
   const renderContent = (text, color) => {
     if (!text) return <p className="muted">No data for this section.</p>;
     const c = SECTION_COLORS[color];
-    return text.split("\n").map((line, i) => {
+
+    // Handle improvements array or string
+    const lines = Array.isArray(text)
+      ? text
+      : text.split("\n").filter((l) => l.trim());
+
+    return lines.map((line, i) => {
       const clean = line.replace(/^\*+|\*+$/g, "").trim();
       if (!clean) return null;
       if (clean.startsWith("-") || clean.startsWith("•")) {
@@ -141,7 +176,6 @@ export default function App() {
           <span className="tagline">Strict ATS-based resume analysis</span>
         </div>
       </header>
-
       <main className="main">
         <div className="left-panel">
           <div className="card upload-card">
@@ -203,21 +237,17 @@ export default function App() {
                 style={{
                   background: `${getScoreColor(result.score)}18`,
                   color: getScoreColor(result.score),
-                  border: `1px solid ${getScoreColor(result.score)}40`
+                  border: `1px solid ${getScoreColor(result.score)}40`,
                 }}
               >
                 {getScoreLabel(result.score)}
               </div>
-
               <div className="breakdown">
                 {result.breakdown && Object.entries(result.breakdown).map(([k, v]) => (
                   <div key={k} className="bar-row">
                     <span className="bar-label">{k}</span>
                     <div className="bar-track">
-                      <div
-                        className="bar-fill"
-                        style={{ width: `${v}%`, background: getScoreColor(v) }}
-                      />
+                      <div className="bar-fill" style={{ width: `${v}%`, background: getScoreColor(v) }} />
                     </div>
                     <span className="bar-val">{v}</span>
                   </div>
@@ -235,14 +265,12 @@ export default function App() {
               <p>Upload a PDF resume and click Analyse to get strict ATS feedback.</p>
             </div>
           )}
-
           {loading && (
             <div className="empty-state">
               <div className="dots"><span /><span /><span /></div>
               <p className="loading-text">Analysing your resume…</p>
             </div>
           )}
-
           {result && (
             <div className="results-wrap">
               <div className="results-top">
@@ -251,9 +279,8 @@ export default function App() {
                   {copied ? "✓ Copied" : "⎘ Copy All"}
                 </button>
               </div>
-
               <div className="tabs">
-                {SECTIONS.map(s => {
+                {SECTIONS.map((s) => {
                   const c = SECTION_COLORS[s.color];
                   return (
                     <button
@@ -272,7 +299,6 @@ export default function App() {
                   );
                 })}
               </div>
-
               <div className="content-box" style={{ background: colors.bg, borderColor: colors.border }}>
                 <h3 className="content-heading" style={{ color: colors.bullet, borderBottomColor: colors.border }}>
                   {activeSection?.label}
