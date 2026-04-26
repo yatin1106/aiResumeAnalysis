@@ -14,14 +14,17 @@ if (!fs.existsSync(uploadsDir)) {
   fs.mkdirSync(uploadsDir, { recursive: true });
 }
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadsDir),
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `${uuidv4()}${ext}`);
-  },
-});
+// Change to memoryStorage
+const storage = multer.memoryStorage();
 
+// In the route, pass buffer as base64
+await resumeQueue.add("analyze", {
+  jobId,
+  fileBuffer: req.file.buffer.toString("base64"), // ← pass buffer not path
+  fileType: req.file.mimetype,
+  jobRole,
+  userId,
+});
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },

@@ -1,11 +1,9 @@
 require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
 const { Worker } = require("bullmq");
-const fs = require("fs");
 const pdfParse = require("pdf-parse");
 const { analyzeResume } = require("../services/groqServices");
-const { connection } = require("./resumeQueue"); // ← import, don't recreate
+const { connection } = require("./resumeQueue");
 const prisma = require("../prismaClient");
-
 
 const RESUME_KEYWORDS = [
   "experience", "education", "skills", "work", "employment",
@@ -16,16 +14,13 @@ const RESUME_KEYWORDS = [
 const worker = new Worker(
   "resume-analysis",
   async (job) => {
-    const { jobId, filePath, jobRole, userId } = job.data; // ← plain, no hyperlink
+    const { jobId, fileBuffer, jobRole, userId } = job.data;
     console.log(`[Worker] Processing job ${jobId}`);
 
-    await job.updateProgress(10); // ← progress tracking
+    await job.updateProgress(10);
 
-    // 1. Parse PDF
-    if (!fs.existsSync(filePath)) {
-      throw new Error("File not found — may have been cleaned up already.");
-    }
-    const buffer = fs.readFileSync(filePath);
+    // 1. Decode buffer and parse PDF
+    const buffer = Buffer.from(fileBuffer, "base64");
     const pdfData = await pdfParse(buffer);
     const resumeText = pdfData.text;
 
@@ -53,37 +48,24 @@ const worker = new Worker(
     // 4. Store in Postgres
     await prisma.resume.create({
       data: {
-        userId: userId || null, // ← nullable, not "anonymous"
+        userId: userId || null,
         content: resumeText,
         score: result.score || null,
         feedback: JSON.stringify(result),
       },
     });
-    // After prisma.resume.create(...) in the worker
-await prisma.job.update({
-  where: { id: jobId },
-  data: {
-    status: "done",
-    result: JSON.stringify(result),
-  },
-});
 
-// In worker.on("failed")
-worker.on("failed", async (job, err) => {
-  await prisma.job.update({
-    where: { id: job.data.jobId },
-    data: { status: "failed", error: err.message },
-  });
-  console.error(`[Worker] Job ${job.id} failed:`, err.message);
-});
-
-    // 5. Cleanup — after DB write succeeds
-    try { fs.unlinkSync(filePath); } catch (e) {
-      console.warn(`[Worker] Could not delete file: ${filePath}`, e.message);
-    }
+    // 5. Update job status to done
+    await prisma.job.update({
+      where: { id: jobId },
+      data: {
+        status: "done",
+        result: JSON.stringify(result),
+      },
+    });
 
     await job.updateProgress(100);
-    console.log(`[Worker] Job ${job.id} done. Score: ${result.score}`); // ← plain job.id
+    console.log(`[Worker] Job ${job.id} done. Score: ${result.score}`);
     return result;
   },
   {
@@ -92,8 +74,16 @@ worker.on("failed", async (job, err) => {
   }
 );
 
-worker.on("failed", (job, err) => {
+worker.on("failed", async (job, err) => {
   console.error(`[Worker] Job ${job.id} failed:`, err.message);
+  try {
+    await prisma.job.update({
+      where: { id: job.data.jobId },
+      data: { status: "failed", error: err.message },
+    });
+  } catch (e) {
+    console.error("[Worker] Could not update job status:", e.message);
+  }
 });
 
 console.log("[Worker] Started, waiting for jobs...");
