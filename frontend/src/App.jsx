@@ -1,5 +1,5 @@
-// v2=4
-import { useState, useRef, useCallback } from "react";
+// v2=5
+import { useState, useRef, useCallback, useEffect } from "react";
 import "./App.css";
 
 const SECTIONS = [
@@ -20,6 +20,166 @@ const SECTION_COLORS = {
 
 const API_URL = "https://airesumeanalysis-production-32af.up.railway.app";
 
+// ─── Auth Page ───────────────────────────────────────────────────────────────
+function AuthPage({ onAuth }) {
+  const [mode, setMode] = useState("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const endpoint = mode === "login" ? "/auth/login" : "/auth/register";
+      const body = mode === "login" ? { email, password } : { email, password, name };
+      const res = await fetch(`${API_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Auth failed");
+      localStorage.setItem("token", data.token);
+      localStorage.setItem("user", JSON.stringify(data.user));
+      onAuth(data.user, data.token);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="auth-wrap">
+      <div className="auth-card">
+        <div className="logo" style={{ justifyContent: "center", marginBottom: 24 }}>
+          <span className="logo-mark">◈</span>
+          <span className="logo-text">ResumeAI</span>
+        </div>
+        <div className="auth-tabs">
+          <button className={`auth-tab ${mode === "login" ? "active" : ""}`} onClick={() => setMode("login")}>Login</button>
+          <button className={`auth-tab ${mode === "register" ? "active" : ""}`} onClick={() => setMode("register")}>Sign Up</button>
+        </div>
+        {mode === "register" && (
+          <input className="auth-input" placeholder="Name" value={name} onChange={(e) => setName(e.target.value)} />
+        )}
+        <input className="auth-input" placeholder="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+        <input className="auth-input" placeholder="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+        {error && <p className="error-msg">⚠ {error}</p>}
+        <button className="analyse-btn" onClick={handleSubmit} disabled={loading}>
+          {loading ? "Please wait…" : mode === "login" ? "Login" : "Create Account"}
+        </button>
+        <p className="auth-skip" onClick={() => onAuth(null, null)}>Continue without account →</p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dashboard Page ───────────────────────────────────────────────────────────
+function Dashboard({ user, token, onBack, onLogout }) {
+  const [history, setHistory] = useState([]);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const headers = { Authorization: `Bearer ${token}` };
+        const [histRes, statsRes] = await Promise.all([
+          fetch(`${API_URL}/dashboard/history`, { headers }),
+          fetch(`${API_URL}/dashboard/stats`, { headers }),
+        ]);
+        const histData = await histRes.json();
+        const statsData = await statsRes.json();
+        setHistory(histData.history || []);
+        setStats(statsData);
+      } catch (err) {
+        console.error("Dashboard error:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [token]);
+
+  const getScoreColor = (score) => {
+    if (score >= 75) return "#16a34a";
+    if (score >= 55) return "#d97706";
+    return "#e11d48";
+  };
+
+  return (
+    <div className="app">
+      <header className="header">
+        <div className="header-inner">
+          <div className="logo">
+            <span className="logo-mark">◈</span>
+            <span className="logo-text">ResumeAI</span>
+          </div>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <span style={{ fontSize: "0.85rem", color: "#666" }}>{user?.email}</span>
+            <button className="copy-btn" onClick={onBack}>+ New Analysis</button>
+            <button className="copy-btn" onClick={onLogout}>Logout</button>
+          </div>
+        </div>
+      </header>
+      <main style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px" }}>
+        <h2 style={{ marginBottom: 24, fontWeight: 700 }}>Your Dashboard</h2>
+
+        {/* Stats */}
+        {stats && (
+          <div className="stats-row">
+            <div className="stat-card">
+              <p className="stat-num">{stats.totalAnalyses}</p>
+              <p className="stat-label">Total Analyses</p>
+            </div>
+            <div className="stat-card">
+              <p className="stat-num" style={{ color: getScoreColor(stats.averageScore) }}>
+                {stats.averageScore ?? "—"}
+              </p>
+              <p className="stat-label">Average Score</p>
+            </div>
+            <div className="stat-card">
+              <p className="stat-num" style={{ color: getScoreColor(stats.bestScore) }}>
+                {stats.bestScore ?? "—"}
+              </p>
+              <p className="stat-label">Best Score</p>
+            </div>
+          </div>
+        )}
+
+        {/* History */}
+        <h3 style={{ marginBottom: 16, fontWeight: 600 }}>Resume History</h3>
+        {loading ? (
+          <p className="muted">Loading…</p>
+        ) : history.length === 0 ? (
+          <p className="muted">No analyses yet. Upload your first resume!</p>
+        ) : (
+          <div className="history-list">
+            {history.map((item) => (
+              <div key={item.id} className="history-item">
+                <div>
+                  <p className="history-filename">{item.fileName}</p>
+                  <p className="history-meta">{item.jobRole} · {new Date(item.createdAt).toLocaleDateString()}</p>
+                </div>
+                {item.score && (
+                  <span className="history-score" style={{ color: getScoreColor(item.score) }}>
+                    {item.score}/100
+                  </span>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ─── Main App ─────────────────────────────────────────────────────────────────
 export default function App() {
   const [file, setFile] = useState(null);
   const [dragging, setDragging] = useState(false);
@@ -28,7 +188,32 @@ export default function App() {
   const [activeTab, setActiveTab] = useState("summary");
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState(null);
+  const [user, setUser] = useState(() => {
+    const u = localStorage.getItem("user");
+    return u ? JSON.parse(u) : null;
+  });
+  const [token, setToken] = useState(() => localStorage.getItem("token") || null);
+  const [page, setPage] = useState("auth"); // auth | home | dashboard
   const fileRef = useRef();
+
+  useEffect(() => {
+    // If already logged in, go straight to home
+    if (token && user) setPage("home");
+  }, []);
+
+  const handleAuth = (user, token) => {
+    setUser(user);
+    setToken(token);
+    setPage("home");
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+    setToken(null);
+    setPage("auth");
+  };
 
   const handleDrop = useCallback((e) => {
     e.preventDefault();
@@ -64,21 +249,21 @@ export default function App() {
       formData.append("resume", file);
       formData.append("jobRole", "Software Engineer");
 
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${API_URL}/analyse`, {
         method: "POST",
+        headers,
         body: formData,
       });
       const data = await res.json();
       if (!res.ok || data.error) throw new Error(data.error || "Server error");
 
-      // Cache hit — result already available
       if (data.status === "done" && data.result) {
         setResult(data.result);
         setActiveTab("summary");
         return;
       }
 
-      // Cache miss — poll for result
       const jobId = data.jobId;
       let analysisResult = null;
       for (let i = 0; i < 30; i++) {
@@ -106,9 +291,7 @@ export default function App() {
   const handleCopy = () => {
     if (!result) return;
     const text = SECTIONS.map((s) => {
-      const content = Array.isArray(result[s.key])
-        ? result[s.key].join("\n")
-        : result[s.key];
+      const content = Array.isArray(result[s.key]) ? result[s.key].join("\n") : result[s.key];
       return `${s.label}\n${"─".repeat(30)}\n${content}`;
     }).join("\n\n");
     navigator.clipboard.writeText(text);
@@ -129,29 +312,24 @@ export default function App() {
   const renderContent = (text, color) => {
     if (!text) return <p className="muted">No data for this section.</p>;
     const c = SECTION_COLORS[color];
-    const lines = Array.isArray(text)
-      ? text
-      : text.split("\n").filter((l) => l.trim());
-
+    const lines = Array.isArray(text) ? text : text.split("\n").filter((l) => l.trim());
     return lines.map((line, i) => {
       const clean = line.replace(/^\*+|\*+$/g, "").trim();
       if (!clean) return null;
       if (clean.startsWith("-") || clean.startsWith("•")) {
-        const content = clean.replace(/^[-•]\s*/, "");
         return (
           <div key={i} className="bullet-row">
             <span className="bullet-dot" style={{ background: c.bullet }} />
-            <p className="bullet-text">{content}</p>
+            <p className="bullet-text">{clean.replace(/^[-•]\s*/, "")}</p>
           </div>
         );
       }
       if (clean.match(/^\d+\./)) {
-        const content = clean.replace(/^\d+\.\s*/, "");
         const num = clean.match(/^(\d+)/)[1];
         return (
           <div key={i} className="numbered-row">
             <span className="num-badge" style={{ background: c.tag, color: c.tagText }}>{num}</span>
-            <p className="bullet-text">{content}</p>
+            <p className="bullet-text">{clean.replace(/^\d+\.\s*/, "")}</p>
           </div>
         );
       }
@@ -171,6 +349,16 @@ export default function App() {
     return "Poor ATS Fit";
   };
 
+  if (page === "auth") return <AuthPage onAuth={handleAuth} />;
+  if (page === "dashboard") return (
+    <Dashboard
+      user={user}
+      token={token}
+      onBack={() => setPage("home")}
+      onLogout={handleLogout}
+    />
+  );
+
   return (
     <div className="app">
       <header className="header">
@@ -179,7 +367,17 @@ export default function App() {
             <span className="logo-mark">◈</span>
             <span className="logo-text">ResumeAI</span>
           </div>
-          <span className="tagline">Strict ATS-based resume analysis</span>
+          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+            <span className="tagline">Strict ATS-based resume analysis</span>
+            {user ? (
+              <>
+                <button className="copy-btn" onClick={() => setPage("dashboard")}>Dashboard</button>
+                <button className="copy-btn" onClick={handleLogout}>Logout</button>
+              </>
+            ) : (
+              <button className="copy-btn" onClick={() => setPage("auth")}>Login</button>
+            )}
+          </div>
         </div>
       </header>
       <main className="main">
@@ -262,7 +460,6 @@ export default function App() {
             </div>
           )}
 
-          {/* Keyword Gap Card */}
           {result?.keywords && (
             <div className="card keyword-card">
               <p className="card-label">Keyword Gap Analysis</p>

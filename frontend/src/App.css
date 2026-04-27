@@ -443,3 +443,135 @@ body {
   color: #be123c;
   border: 1px solid #fecdd3;
 }
+
+/* Auth */
+.auth-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f9f9fb;
+}
+
+.auth-card {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 16px;
+  padding: 40px;
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.auth-tab {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  background: white;
+  cursor: pointer;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.auth-tab.active {
+  background: #f4f3ff;
+  border-color: #c4b8f8;
+  color: #6d4ed7;
+  font-weight: 600;
+}
+
+.auth-input {
+  padding: 10px 14px;
+  border: 1px solid #e5e5e5;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  outline: none;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.auth-input:focus {
+  border-color: #c4b8f8;
+}
+
+.auth-skip {
+  text-align: center;
+  font-size: 0.8rem;
+  color: #999;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+.auth-skip:hover {
+  color: #6d4ed7;
+}
+
+/* Dashboard */
+.stats-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  flex: 1;
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-num {
+  font-size: 2rem;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  color: #888;
+  margin: 0;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.history-item {
+  background: white;
+  border: 1px solid #e5e5e5;
+  border-radius: 10px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.history-filename {
+  font-weight: 600;
+  font-size: 0.9rem;
+  margin: 0 0 4px;
+}
+
+.history-meta {
+  font-size: 0.78rem;
+  color: #888;
+  margin: 0;
+}
+
+.history-score {
+  font-size: 1.1rem;
+  font-weight: 700;
+}
