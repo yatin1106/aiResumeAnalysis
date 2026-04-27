@@ -8,30 +8,32 @@ datasource db {
 }
 
 model User {
-  id       String   @id @default(uuid())
-  email    String   @unique
-  password String
-  resumes  Resume[]
-  jobs     Job[]
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  resumes   Resume[]
+  jobs      Job[]
 }
 
 model Resume {
   id        String   @id @default(uuid())
   userId    String?
   content   String
-  score     Float?   // ← was Int, Groq returns decimals
+  score     Float?
   feedback  String?
   createdAt DateTime @default(now())
-  user      User?    @relation(fields: [userId], references: [id]) // ← optional relation
+  user      User?    @relation(fields: [userId], references: [id])
 }
 
 model Job {
   id        String   @id
   userId    String?
-  status    String   @default("pending") // pending | processing | done | failed
+  status    String   @default("pending")
   jobRole   String
   fileName  String
-  result    String?  // JSON stringified
+  result    String?
   error     String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -6,6 +6,8 @@ const rateLimit = require("express-rate-limit");
 const winston = require("winston");
 const analyzeRoute = require("./routes/analyse");
 const jobsRoute = require("./routes/jobs");
+const authRoute = require("./routes/auth");
+const dashboardRoute = require("./routes/dashboard");
 
 // Logger setup
 const logger = winston.createLogger({
@@ -28,7 +30,7 @@ const app = express();
 app.use(cors({
   origin: process.env.FRONTEND_URL || "https://ai-resume-analysis-kappa.vercel.app",
   methods: ["GET", "POST", "OPTIONS"],
-  allowedHeaders: ["Content-Type"]
+  allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
 app.use(express.json());
@@ -64,6 +66,8 @@ const analyseLimiter = rateLimit({
 app.use(globalLimiter);
 app.use("/analyse", analyseLimiter, analyzeRoute);
 app.use("/jobs", jobsRoute);
+app.use("/auth", authRoute);
+app.use("/dashboard", dashboardRoute);
 
 app.get("/", (req, res) => {
   res.send("Backend is running");
