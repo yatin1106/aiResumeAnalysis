@@ -26,6 +26,7 @@ const logger = winston.createLogger({
 });
 
 const app = express();
+app.set("trust proxy", 1); // ← add this line
 
 app.use(cors({
   origin: process.env.FRONTEND_URL || "https://ai-resume-analysis-kappa.vercel.app",
