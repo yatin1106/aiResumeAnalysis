@@ -1,2 +1,2 @@
-web: node server.js
-worker: node worker.js
+web: npx prisma migrate deploy && node server.js
+worker: node queues/resumeWorker.js
