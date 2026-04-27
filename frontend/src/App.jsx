@@ -55,47 +55,53 @@ export default function App() {
       setError(null);
     }
   };
+const handleAnalyse = async () => {
+  if (!file) return;
+  setLoading(true);
+  setError(null);
+  try {
+    const formData = new FormData();
+    formData.append("resume", file);
+    formData.append("jobRole", "Software Engineer");
 
-  const handleAnalyse = async () => {
-    if (!file) return;
-    setLoading(true);
-    setError(null);
-    try {
-      const formData = new FormData();
-      formData.append("resume", file);
-      formData.append("jobRole", "Software Engineer");
+    const res = await fetch(`${API_URL}/analyse`, {
+      method: "POST",
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) throw new Error(data.error || "Server error");
 
-      const res = await fetch(`${API_URL}/analyse`, {
-        method: "POST",
-        body: formData,
-      });
-      const data = await res.json();
-      if (!res.ok || data.error) throw new Error(data.error || "Server error");
-
-      // Poll for result
-      const jobId = data.jobId;
-      let analysisResult = null;
-      for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const poll = await fetch(`${API_URL}/jobs/${jobId}`);
-        const pollData = await poll.json();
-        if (pollData.status === "done") {
-          analysisResult = pollData.result;
-          break;
-        } else if (pollData.status === "failed") {
-          throw new Error(pollData.error || "Analysis failed");
-        }
-      }
-
-      if (!analysisResult) throw new Error("Timed out waiting for analysis");
-      setResult(analysisResult);
+    // Cache hit — result already available
+    if (data.status === "done" && data.result) {
+      setResult(data.result);
       setActiveTab("summary");
-    } catch (err) {
-      setError(err.message || "Analysis failed.");
-    } finally {
-      setLoading(false);
+      return;
     }
-  };
+
+    // Cache miss — poll for result
+    const jobId = data.jobId;
+    let analysisResult = null;
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 3000));
+      const poll = await fetch(`${API_URL}/jobs/${jobId}`);
+      const pollData = await poll.json();
+      if (pollData.status === "done") {
+        analysisResult = pollData.result;
+        break;
+      } else if (pollData.status === "failed") {
+        throw new Error(pollData.error || "Analysis failed");
+      }
+    }
+
+    if (!analysisResult) throw new Error("Timed out waiting for analysis");
+    setResult(analysisResult);
+    setActiveTab("summary");
+  } catch (err) {
+    setError(err.message || "Analysis failed.");
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleCopy = () => {
     if (!result) return;

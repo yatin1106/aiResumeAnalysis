@@ -1,15 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
+const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
 const { resumeQueue } = require("../queues/resumeQueue");
+const { getRedisClient } = require("../queues/resumeQueue");
 const prisma = require("../prismaClient");
 
-// Use memory storage (no disk writes)
-const storage = multer.memoryStorage();
+const CACHE_TTL = 60 * 60 * 24; // 24 hours
 
+const storage = multer.memoryStorage();
 const upload = multer({
   storage,
   limits: { fileSize: 5 * 1024 * 1024 },
@@ -37,9 +37,34 @@ router.post(
         return res.status(400).json({ error: "No resume file uploaded." });
       }
 
-      const jobId = uuidv4();
       const jobRole = req.body.jobRole || "Software Engineer";
       const userId = req.user?.id || null;
+
+      // Generate hash of PDF buffer + jobRole
+      const hash = crypto
+        .createHash("sha256")
+        .update(req.file.buffer)
+        .update(jobRole)
+        .digest("hex");
+
+      const cacheKey = `resume:cache:${hash}`;
+
+      // Check Redis cache
+      const redis = getRedisClient();
+      const cached = await redis.get(cacheKey);
+      if (cached) {
+        console.log(`[Cache] HIT for hash ${hash}`);
+        return res.status(200).json({
+          jobId: null,
+          status: "done",
+          cached: true,
+          result: JSON.parse(cached),
+        });
+      }
+
+      console.log(`[Cache] MISS for hash ${hash}`);
+
+      const jobId = uuidv4();
 
       // Save job record to Postgres
       await prisma.job.create({
@@ -52,7 +77,7 @@ router.post(
         },
       });
 
-      // Pass buffer as base64 (memoryStorage has no filePath)
+      // Add to queue, pass cacheKey so worker can store result
       await resumeQueue.add(
         "analyze",
         {
@@ -61,6 +86,7 @@ router.post(
           fileType: req.file.mimetype,
           jobRole,
           userId,
+          cacheKey, // ← worker will use this to cache result
         },
         {
           attempts: 3,

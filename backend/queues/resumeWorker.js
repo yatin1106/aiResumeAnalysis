@@ -2,8 +2,10 @@ require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
 const { Worker } = require("bullmq");
 const pdfParse = require("pdf-parse");
 const { analyzeResume } = require("../services/groqServices");
-const { connection } = require("./resumeQueue");
+const { connection, getRedisClient } = require("./resumeQueue");
 const prisma = require("../prismaClient");
+
+const CACHE_TTL = 60 * 60 * 24; // 24 hours
 
 const RESUME_KEYWORDS = [
   "experience", "education", "skills", "work", "employment",
@@ -14,7 +16,7 @@ const RESUME_KEYWORDS = [
 const worker = new Worker(
   "resume-analysis",
   async (job) => {
-    const { jobId, fileBuffer, jobRole, userId } = job.data;
+    const { jobId, fileBuffer, jobRole, userId, cacheKey } = job.data;
     console.log(`[Worker] Processing job ${jobId}`);
     await job.updateProgress(10);
 
@@ -59,6 +61,13 @@ const worker = new Worker(
         result: JSON.stringify(result),
       },
     });
+
+    // 6. Store in Redis cache
+    if (cacheKey) {
+      const redis = getRedisClient();
+      await redis.set(cacheKey, JSON.stringify(result), "EX", CACHE_TTL);
+      console.log(`[Cache] Stored result for key ${cacheKey}`);
+    }
 
     await job.updateProgress(100);
     console.log(`[Worker] Job ${job.id} done. Score: ${result.score}`);
