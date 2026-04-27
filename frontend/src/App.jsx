@@ -19,7 +19,7 @@ const SECTION_COLORS = {
   red:    { bg: "#fff1f2", border: "#fecdd3", bullet: "#e11d48", tag: "#ffe4e6", tagText: "#be123c" },
 };
 
-const API_URL = "https://spirited-wisdom-production-2680.up.railway.app";
+const API_URL = "https://airesumeanalysis-production-32af.up.railway.app";
 
 export default function App() {
   const [file, setFile] = useState(null);
