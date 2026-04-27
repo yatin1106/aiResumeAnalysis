@@ -1,7 +1,48 @@
 const { Groq } = require("groq-sdk");
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
+// Role-based keyword maps
+const ROLE_KEYWORDS = {
+  "Software Engineer": [
+    "algorithms", "data structures", "system design", "REST API", "microservices",
+    "CI/CD", "unit testing", "git", "agile", "scalability", "distributed systems"
+  ],
+  "Data Scientist": [
+    "machine learning", "python", "pandas", "numpy", "tensorflow", "pytorch",
+    "SQL", "statistics", "data pipeline", "model training", "feature engineering"
+  ],
+  "Frontend Engineer": [
+    "react", "javascript", "typescript", "CSS", "HTML", "webpack", "REST API",
+    "responsive design", "accessibility", "performance optimization", "testing"
+  ],
+  "Backend Engineer": [
+    "node.js", "REST API", "database", "SQL", "microservices", "docker",
+    "kubernetes", "caching", "message queue", "authentication", "scalability"
+  ],
+  "DevOps Engineer": [
+    "docker", "kubernetes", "CI/CD", "terraform", "AWS", "GCP", "monitoring",
+    "logging", "infrastructure", "automation", "linux", "bash"
+  ],
+  "Product Manager": [
+    "roadmap", "stakeholder", "agile", "scrum", "metrics", "KPI", "user research",
+    "product strategy", "A/B testing", "prioritization", "OKR"
+  ],
+};
+
+// Detect missing keywords based on role
+const getKeywordGaps = (resumeText, jobRole) => {
+  const keywords = ROLE_KEYWORDS[jobRole] || ROLE_KEYWORDS["Software Engineer"];
+  const lowerText = resumeText.toLowerCase();
+  const missing = keywords.filter((k) => !lowerText.includes(k.toLowerCase()));
+  const present = keywords.filter((k) => lowerText.includes(k.toLowerCase()));
+  return { missing, present, total: keywords.length };
+};
+
 const analyzeResume = async (resumeText, jobRole = "Software Engineer") => {
+  // Keyword gap detection before AI call
+  const { missing, present, total } = getKeywordGaps(resumeText, jobRole);
+  const keywordScore = Math.round((present.length / total) * 100);
+
   const completion = await groq.chat.completions.create({
     model: "llama-3.3-70b-versatile",
     response_format: { type: "json_object" },
@@ -16,7 +57,7 @@ Respond ONLY with a valid JSON object with exactly these keys:
 - "education": string
 - "improvements": array of strings
 - "score": number from 0-100
-- "breakdown": object with keys "Content", "Format", "Impact" each a number from 0-100
+- "breakdown": object with keys "Content", "Format", "Impact", "Keywords" each a number from 0-100
 Rules:
 - "improvements" MUST be a JSON array of at least 6 strings, each a detailed actionable point
 - "score" must be strict — average resumes score 45-65, only exceptional ones score 75+
@@ -26,19 +67,27 @@ Rules:
       {
         role: "user",
         content: `Perform a strict ATS compatibility analysis on this resume for a ${jobRole} role. Be specific, detailed, and reference actual content from the resume.
+
+Keyword Analysis (already computed):
+- Keywords present: ${present.join(", ") || "none"}
+- Keywords missing: ${missing.join(", ") || "none"}
+- Keyword match score: ${keywordScore}%
+
 Return a JSON object with:
 - summary: Write 3-4 sentences covering the candidate's overall profile, their ATS compatibility level, what stands out positively, and what immediately hurts their chances. Name the candidate if possible.
-- skills: Analyze whether the skills listed are ATS-keyword-rich. Are they relevant to their target role? Are they missing critical industry keywords? Are they listed in a way ATS can parse them? Be specific about what's present and what's missing.
+- skills: Analyze whether the skills listed are ATS-keyword-rich. Reference the missing keywords above and explain why they matter for a ${jobRole} role. Be specific about what's present and what's missing.
 - experience: Evaluate each role — are achievements quantified with numbers and percentages? Are strong action verbs used? Is the experience section ATS-friendly in format? Call out specific weak bullet points and explain why they fail ATS screening.
 - education: Is the education section complete with degree name, institution, graduation year? Is it formatted so ATS can parse it correctly? Any certifications or relevant coursework that should be added?
-- improvements: Return a JSON array of exactly 8 specific, actionable improvements. Each must reference something actual in the resume and explain exactly how to fix it. No generic advice.
-- score: Give a strict ATS compatibility score 0-100. Be harsh — justify mentally based on keyword density, formatting, quantification, and completeness.
-- breakdown: Score these three dimensions strictly from 0-100:
+- improvements: Return a JSON array of exactly 8 specific, actionable improvements. Each must reference something actual in the resume and explain exactly how to fix it. Include at least 2 improvements about adding missing keywords: ${missing.slice(0, 5).join(", ")}.
+- score: Give a strict ATS compatibility score 0-100. Factor in the keyword match score of ${keywordScore}%.
+- breakdown: Score these four dimensions strictly from 0-100:
   - Content: quality and relevance of the actual content
   - Format: ATS parseability and structure
   - Impact: strength of achievements and language used
+  - Keywords: based on the keyword match score of ${keywordScore}%
+
 Resume:
-${resumeText.slice(0, 8000)}`,  // ← increased from 4000
+${resumeText.slice(0, 8000)}`,
       },
     ],
     temperature: 0.1,
@@ -56,7 +105,6 @@ ${resumeText.slice(0, 8000)}`,  // ← increased from 4000
     throw new Error("AI returned invalid format");
   }
 
-  // ← Keep improvements as array, don't stringify it
   if (!Array.isArray(parsed.improvements)) {
     if (typeof parsed.improvements === "string") {
       parsed.improvements = parsed.improvements
@@ -74,6 +122,13 @@ ${resumeText.slice(0, 8000)}`,  // ← increased from 4000
       throw new Error(`Missing field in AI response: ${key}`);
     }
   }
+
+  // Attach keyword data to result
+  parsed.keywords = {
+    present,
+    missing,
+    score: keywordScore,
+  };
 
   return parsed;
 };

@@ -398,3 +398,48 @@ body {
   margin: 0 auto 1.25rem;
   width: fit-content;
 }
+
+.keyword-card {
+  margin-top: 12px;
+}
+
+.keyword-score {
+  font-size: 1.2rem;
+  font-weight: 700;
+  margin-bottom: 12px;
+}
+
+.keyword-section {
+  margin-bottom: 10px;
+}
+
+.keyword-title {
+  font-size: 0.75rem;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.keyword-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.keyword-tag {
+  font-size: 0.7rem;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-weight: 500;
+}
+
+.keyword-tag.present {
+  background: #dcfce7;
+  color: #15803d;
+  border: 1px solid #bbf7d0;
+}
+
+.keyword-tag.missing {
+  background: #ffe4e6;
+  color: #be123c;
+  border: 1px solid #fecdd3;
+}

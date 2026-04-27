@@ -1,5 +1,4 @@
-
-// v2=3
+// v2=4
 import { useState, useRef, useCallback } from "react";
 import "./App.css";
 
@@ -55,53 +54,54 @@ export default function App() {
       setError(null);
     }
   };
-const handleAnalyse = async () => {
-  if (!file) return;
-  setLoading(true);
-  setError(null);
-  try {
-    const formData = new FormData();
-    formData.append("resume", file);
-    formData.append("jobRole", "Software Engineer");
 
-    const res = await fetch(`${API_URL}/analyse`, {
-      method: "POST",
-      body: formData,
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || "Server error");
+  const handleAnalyse = async () => {
+    if (!file) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const formData = new FormData();
+      formData.append("resume", file);
+      formData.append("jobRole", "Software Engineer");
 
-    // Cache hit — result already available
-    if (data.status === "done" && data.result) {
-      setResult(data.result);
-      setActiveTab("summary");
-      return;
-    }
+      const res = await fetch(`${API_URL}/analyse`, {
+        method: "POST",
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) throw new Error(data.error || "Server error");
 
-    // Cache miss — poll for result
-    const jobId = data.jobId;
-    let analysisResult = null;
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
-      const poll = await fetch(`${API_URL}/jobs/${jobId}`);
-      const pollData = await poll.json();
-      if (pollData.status === "done") {
-        analysisResult = pollData.result;
-        break;
-      } else if (pollData.status === "failed") {
-        throw new Error(pollData.error || "Analysis failed");
+      // Cache hit — result already available
+      if (data.status === "done" && data.result) {
+        setResult(data.result);
+        setActiveTab("summary");
+        return;
       }
-    }
 
-    if (!analysisResult) throw new Error("Timed out waiting for analysis");
-    setResult(analysisResult);
-    setActiveTab("summary");
-  } catch (err) {
-    setError(err.message || "Analysis failed.");
-  } finally {
-    setLoading(false);
-  }
-};
+      // Cache miss — poll for result
+      const jobId = data.jobId;
+      let analysisResult = null;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 3000));
+        const poll = await fetch(`${API_URL}/jobs/${jobId}`);
+        const pollData = await poll.json();
+        if (pollData.status === "done") {
+          analysisResult = pollData.result;
+          break;
+        } else if (pollData.status === "failed") {
+          throw new Error(pollData.error || "Analysis failed");
+        }
+      }
+
+      if (!analysisResult) throw new Error("Timed out waiting for analysis");
+      setResult(analysisResult);
+      setActiveTab("summary");
+    } catch (err) {
+      setError(err.message || "Analysis failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleCopy = () => {
     if (!result) return;
@@ -129,8 +129,6 @@ const handleAnalyse = async () => {
   const renderContent = (text, color) => {
     if (!text) return <p className="muted">No data for this section.</p>;
     const c = SECTION_COLORS[color];
-
-    // Handle improvements array or string
     const lines = Array.isArray(text)
       ? text
       : text.split("\n").filter((l) => l.trim());
@@ -261,6 +259,38 @@ const handleAnalyse = async () => {
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+
+          {/* Keyword Gap Card */}
+          {result?.keywords && (
+            <div className="card keyword-card">
+              <p className="card-label">Keyword Gap Analysis</p>
+              <div className="keyword-score">
+                <span style={{ color: getScoreColor(result.keywords.score) }}>
+                  {result.keywords.score}% match
+                </span>
+              </div>
+              {result.keywords.present?.length > 0 && (
+                <div className="keyword-section">
+                  <p className="keyword-title" style={{ color: "#16a34a" }}>✓ Present</p>
+                  <div className="keyword-tags">
+                    {result.keywords.present.map((k) => (
+                      <span key={k} className="keyword-tag present">{k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {result.keywords.missing?.length > 0 && (
+                <div className="keyword-section">
+                  <p className="keyword-title" style={{ color: "#e11d48" }}>✗ Missing</p>
+                  <div className="keyword-tags">
+                    {result.keywords.missing.map((k) => (
+                      <span key={k} className="keyword-tag missing">{k}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
