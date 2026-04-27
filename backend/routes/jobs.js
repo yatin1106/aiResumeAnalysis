@@ -2,7 +2,6 @@ const express = require("express");
 const router = express.Router();
 const prisma = require("../prismaClient");
 
-
 router.get("/:id", async (req, res) => {
   try {
     const job = await prisma.job.findUnique({

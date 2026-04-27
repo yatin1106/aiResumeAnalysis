@@ -16,7 +16,6 @@ const worker = new Worker(
   async (job) => {
     const { jobId, fileBuffer, jobRole, userId } = job.data;
     console.log(`[Worker] Processing job ${jobId}`);
-
     await job.updateProgress(10);
 
     // 1. Decode buffer and parse PDF
@@ -27,7 +26,6 @@ const worker = new Worker(
     if (!resumeText || resumeText.trim().length === 0) {
       throw new Error("Could not extract text from PDF.");
     }
-
     await job.updateProgress(30);
 
     // 2. Keyword validation
@@ -37,12 +35,10 @@ const worker = new Worker(
     if (matches.length < 3) {
       throw new Error("This does not appear to be a resume.");
     }
-
     await job.updateProgress(50);
 
     // 3. AI Analysis
     const result = await analyzeResume(resumeText, jobRole);
-
     await job.updateProgress(80);
 
     // 4. Store in Postgres
