@@ -3,8 +3,7 @@ const router = express.Router();
 const multer = require("multer");
 const crypto = require("crypto");
 const { v4: uuidv4 } = require("uuid");
-const { resumeQueue } = require("../queues/resumeQueue");
-const { getRedisClient } = require("../queues/resumeQueue");
+const { resumeQueue, getRedisClient } = require("../queues/resumeQueue");
 const prisma = require("../prismaClient");
 
 const CACHE_TTL = 60 * 60 * 24; // 24 hours
