@@ -2,11 +2,25 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const crypto = require("crypto");
+const jwt = require("jsonwebtoken");
 const { v4: uuidv4 } = require("uuid");
 const { resumeQueue, getRedisClient } = require("../queues/resumeQueue");
 const prisma = require("../prismaClient");
 
 const CACHE_TTL = 60 * 60 * 24; // 24 hours
+
+// Optional auth — attach user if token present
+const optionalAuth = (req, res, next) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (token) {
+    try {
+      req.user = jwt.verify(token, process.env.JWT_SECRET);
+    } catch {
+      // invalid token, ignore
+    }
+  }
+  next();
+};
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -20,6 +34,7 @@ const upload = multer({
 
 router.post(
   "/",
+  optionalAuth,
   (req, res, next) => {
     upload.single("resume")(req, res, (err) => {
       if (err instanceof multer.MulterError) {
@@ -53,6 +68,22 @@ router.post(
       const cached = await redis.get(cacheKey);
       if (cached) {
         console.log(`[Cache] HIT for hash ${hash}`);
+
+        // Save job record even on cache hit so it appears in dashboard
+        if (userId) {
+          const jobId = uuidv4();
+          await prisma.job.create({
+            data: {
+              id: jobId,
+              userId,
+              status: "done",
+              jobRole,
+              fileName: req.file.originalname,
+              result: cached,
+            },
+          });
+        }
+
         return res.status(200).json({
           jobId: null,
           status: "done",
@@ -62,7 +93,6 @@ router.post(
       }
 
       console.log(`[Cache] MISS for hash ${hash}`);
-
       const jobId = uuidv4();
 
       // Save job record to Postgres
@@ -76,7 +106,7 @@ router.post(
         },
       });
 
-      // Add to queue, pass cacheKey so worker can store result
+      // Add to queue
       await resumeQueue.add(
         "analyze",
         {
@@ -85,7 +115,7 @@ router.post(
           fileType: req.file.mimetype,
           jobRole,
           userId,
-          cacheKey, // ← worker will use this to cache result
+          cacheKey,
         },
         {
           attempts: 3,
