@@ -29,7 +29,6 @@ const ROLE_KEYWORDS = {
   ],
 };
 
-// Detect missing keywords based on role
 const getKeywordGaps = (resumeText, jobRole) => {
   const keywords = ROLE_KEYWORDS[jobRole] || ROLE_KEYWORDS["Software Engineer"];
   const lowerText = resumeText.toLowerCase();
@@ -39,7 +38,6 @@ const getKeywordGaps = (resumeText, jobRole) => {
 };
 
 const analyzeResume = async (resumeText, jobRole = "Software Engineer") => {
-  // Keyword gap detection before AI call
   const { missing, present, total } = getKeywordGaps(resumeText, jobRole);
   const keywordScore = Math.round((present.length / total) * 100);
 
@@ -49,24 +47,26 @@ const analyzeResume = async (resumeText, jobRole = "Software Engineer") => {
     messages: [
       {
         role: "system",
-        content: `You are an expert ATS (Applicant Tracking System) resume reviewer with 15 years of recruiting experience. You give brutally honest, detailed, and actionable feedback.
+        content: `You are a friendly but honest resume coach with 15 years of recruiting experience. You give balanced, constructive feedback — acknowledging what the candidate does well while clearly pointing out areas to improve. You never make someone feel like they have no skills. You always find genuine strengths to highlight before suggesting improvements.
+
 Respond ONLY with a valid JSON object with exactly these keys:
 - "summary": string
-- "skills": string  
+- "skills": string
 - "experience": string
 - "education": string
 - "improvements": array of strings
 - "score": number from 0-100
 - "breakdown": object with keys "Content", "Format", "Impact", "Keywords" each a number from 0-100
+
 Rules:
-- "improvements" MUST be a JSON array of at least 6 strings, each a detailed actionable point
-- "score" must be strict — average resumes score 45-65, only exceptional ones score 75+
-- All string fields must be detailed paragraphs with specific observations, not generic advice
+- "improvements" MUST be a JSON array of at least 6 strings, each a specific actionable point
+- "score" should be fair — a decent resume with real experience scores 55-70, a strong one scores 70-85
+- Always lead each section with what the candidate is doing right before mentioning gaps
 - Never use | characters anywhere in your response`,
       },
       {
         role: "user",
-        content: `Perform a strict ATS compatibility analysis on this resume for a ${jobRole} role. Be specific, detailed, and reference actual content from the resume.
+        content: `Analyze this resume for a ${jobRole} role. Be specific and reference actual content from the resume.
 
 Keyword Analysis (already computed):
 - Keywords present: ${present.join(", ") || "none"}
@@ -74,23 +74,29 @@ Keyword Analysis (already computed):
 - Keyword match score: ${keywordScore}%
 
 Return a JSON object with:
-- summary: Write 3-4 sentences covering the candidate's overall profile, their ATS compatibility level, what stands out positively, and what immediately hurts their chances. Name the candidate if possible.
-- skills: Analyze whether the skills listed are ATS-keyword-rich. Reference the missing keywords above and explain why they matter for a ${jobRole} role. Be specific about what's present and what's missing.
-- experience: Evaluate each role — are achievements quantified with numbers and percentages? Are strong action verbs used? Is the experience section ATS-friendly in format? Call out specific weak bullet points and explain why they fail ATS screening.
-- education: Is the education section complete with degree name, institution, graduation year? Is it formatted so ATS can parse it correctly? Any certifications or relevant coursework that should be added?
-- improvements: Return a JSON array of exactly 8 specific, actionable improvements. Each must reference something actual in the resume and explain exactly how to fix it. Include at least 2 improvements about adding missing keywords: ${missing.slice(0, 5).join(", ")}.
-- score: Give a strict ATS compatibility score 0-100. Factor in the keyword match score of ${keywordScore}%.
-- breakdown: Score these four dimensions strictly from 0-100:
-  - Content: quality and relevance of the actual content
+- summary: Write 3-4 sentences. Start by naming the candidate and highlighting their strongest qualities and what makes them a viable candidate. Then mention 1-2 specific things that would improve their ATS compatibility. Keep the tone encouraging but honest.
+
+- skills: Start by acknowledging the skills they do have and why those are valuable for a ${jobRole} role. Then mention the missing keywords (${missing.slice(0, 4).join(", ")}) and briefly explain why adding them would help. Keep it constructive.
+
+- experience: Highlight what they've done well in their experience — any good use of action verbs, relevant projects, or domain experience. Then suggest specific ways to strengthen bullet points with numbers or metrics. Reference actual roles or projects from the resume.
+
+- education: Acknowledge their educational background positively. Mention if the degree/institution is relevant to the role. Suggest any certifications or coursework that could strengthen their profile.
+
+- improvements: Return a JSON array of exactly 8 actionable improvements. Frame each as an opportunity, not a criticism. At least 2 should mention adding missing keywords: ${missing.slice(0, 5).join(", ")}. Each should reference something specific from the resume.
+
+- score: Give a fair ATS compatibility score 0-100. A resume with solid experience and some keyword gaps should score in the 55-72 range. Only penalize heavily for major formatting issues or completely missing sections.
+
+- breakdown: Score these four dimensions from 0-100:
+  - Content: quality and relevance of actual content
   - Format: ATS parseability and structure
-  - Impact: strength of achievements and language used
-  - Keywords: based on the keyword match score of ${keywordScore}%
+  - Impact: strength of achievements and language
+  - Keywords: based on keyword match score of ${keywordScore}%
 
 Resume:
 ${resumeText.slice(0, 8000)}`,
       },
     ],
-    temperature: 0.1,
+    temperature: 0.2,
     max_tokens: 2000,
   });
 
@@ -123,7 +129,6 @@ ${resumeText.slice(0, 8000)}`,
     }
   }
 
-  // Attach keyword data to result
   parsed.keywords = {
     present,
     missing,
