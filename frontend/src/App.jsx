@@ -1,5 +1,6 @@
-// v2=5
+// v2=6
 import { useState, useRef, useCallback, useEffect } from "react";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from "recharts";
 import "./App.css";
 
 const SECTIONS = [
@@ -20,7 +21,7 @@ const SECTION_COLORS = {
 
 const API_URL = "https://airesumeanalysis-production-32af.up.railway.app";
 
-// ─── Auth Page ───────────────────────────────────────────────────────────────
+// ─── Auth Page ────────────────────────────────────────────────────────────────
 function AuthPage({ onAuth }) {
   const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
@@ -111,6 +112,30 @@ function Dashboard({ user, token, onBack, onLogout }) {
     return "#e11d48";
   };
 
+  // Prepare chart data — oldest first
+  const chartData = [...history]
+    .filter((h) => h.score)
+    .reverse()
+    .map((h, i) => ({
+      name: `#${i + 1} ${h.fileName.replace(".pdf", "").slice(0, 12)}`,
+      score: h.score,
+      date: new Date(h.createdAt).toLocaleDateString(),
+    }));
+
+  const CustomTooltip = ({ active, payload }) => {
+    if (active && payload?.length) {
+      const d = payload[0].payload;
+      return (
+        <div style={{ background: "white", border: "1px solid #e5e5e5", borderRadius: 8, padding: "8px 12px", fontSize: "0.8rem" }}>
+          <p style={{ margin: 0, fontWeight: 600 }}>{d.name}</p>
+          <p style={{ margin: 0, color: getScoreColor(d.score) }}>Score: {d.score}/100</p>
+          <p style={{ margin: 0, color: "#888" }}>{d.date}</p>
+        </div>
+      );
+    }
+    return null;
+  };
+
   return (
     <div className="app">
       <header className="header">
@@ -126,6 +151,7 @@ function Dashboard({ user, token, onBack, onLogout }) {
           </div>
         </div>
       </header>
+
       <main style={{ maxWidth: 900, margin: "0 auto", padding: "32px 24px" }}>
         <h2 style={{ marginBottom: 24, fontWeight: 700 }}>Your Dashboard</h2>
 
@@ -151,7 +177,39 @@ function Dashboard({ user, token, onBack, onLogout }) {
           </div>
         )}
 
-        {/* History */}
+        {/* Score History Chart */}
+        {chartData.length > 1 && (
+          <div className="card" style={{ marginBottom: 32, padding: 24 }}>
+            <p className="card-label" style={{ marginBottom: 16 }}>Score Progress</p>
+            <ResponsiveContainer width="100%" height={220}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: "#888" }}
+                  tickLine={false}
+                />
+                <YAxis
+                  domain={[0, 100]}
+                  tick={{ fontSize: 11, fill: "#888" }}
+                  tickLine={false}
+                  axisLine={false}
+                />
+                <Tooltip content={<CustomTooltip />} />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#6d4ed7"
+                  strokeWidth={2.5}
+                  dot={{ fill: "#6d4ed7", r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* History List */}
         <h3 style={{ marginBottom: 16, fontWeight: 600 }}>Resume History</h3>
         {loading ? (
           <p className="muted">Loading…</p>
@@ -193,11 +251,10 @@ export default function App() {
     return u ? JSON.parse(u) : null;
   });
   const [token, setToken] = useState(() => localStorage.getItem("token") || null);
-  const [page, setPage] = useState("auth"); // auth | home | dashboard
+  const [page, setPage] = useState("auth");
   const fileRef = useRef();
 
   useEffect(() => {
-    // If already logged in, go straight to home
     if (token && user) setPage("home");
   }, []);
 
@@ -248,7 +305,6 @@ export default function App() {
       const formData = new FormData();
       formData.append("resume", file);
       formData.append("jobRole", "Software Engineer");
-
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${API_URL}/analyse`, {
         method: "POST",
@@ -351,12 +407,7 @@ export default function App() {
 
   if (page === "auth") return <AuthPage onAuth={handleAuth} />;
   if (page === "dashboard") return (
-    <Dashboard
-      user={user}
-      token={token}
-      onBack={() => setPage("home")}
-      onLogout={handleLogout}
-    />
+    <Dashboard user={user} token={token} onBack={() => setPage("home")} onLogout={handleLogout} />
   );
 
   return (
